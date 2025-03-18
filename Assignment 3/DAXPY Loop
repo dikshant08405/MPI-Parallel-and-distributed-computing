@@ -1,0 +1,75 @@
+#include <mpi.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+
+#define VECTOR_SIZE (1 << 16)  // 2^16 elements
+
+void compute_serial(double scalar, double *vec_A, double *vec_B) {
+    for (int i = 0; i < VECTOR_SIZE; i++) {
+        vec_A[i] = scalar * vec_A[i] + vec_B[i];
+    }
+}
+
+void compute_parallel(double scalar, double *vec_A, double *vec_B, int process_id, int num_processes) {
+    int elements_per_process = VECTOR_SIZE / num_processes;
+    int start_index = process_id * elements_per_process;
+    int end_index = start_index + elements_per_process;
+
+    for (int i = start_index; i < end_index; i++) {
+        vec_A[i] = scalar * vec_A[i] + vec_B[i];
+    }
+
+    MPI_Allgather(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL, vec_A, elements_per_process, MPI_DOUBLE, MPI_COMM_WORLD);
+}
+
+int main(int argc, char **argv) {
+    int process_id, num_processes;
+    double scalar = 2.5, *vec_A, *vec_B;
+    double start_time, end_time, serial_duration, parallel_duration;
+
+    MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &process_id);
+    MPI_Comm_size(MPI_COMM_WORLD, &num_processes);
+
+    vec_A = (double*)malloc(VECTOR_SIZE * sizeof(double));
+    vec_B = (double*)malloc(VECTOR_SIZE * sizeof(double));
+
+    // Initialize vectors
+    if (process_id == 0) {
+        for (int i = 0; i < VECTOR_SIZE; i++) {
+            vec_A[i] = rand() / (double)RAND_MAX;
+            vec_B[i] = rand() / (double)RAND_MAX;
+        }
+    }
+
+    // Serial Execution
+    if (process_id == 0) {
+        start_time = MPI_Wtime();
+        compute_serial(scalar, vec_A, vec_B);
+        end_time = MPI_Wtime();
+        serial_duration = end_time - start_time;
+    }
+
+    // Broadcast vec_A and vec_B to all processes
+    MPI_Bcast(vec_A, VECTOR_SIZE, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    MPI_Bcast(vec_B, VECTOR_SIZE, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+    // Parallel Execution
+    start_time = MPI_Wtime();
+    compute_parallel(scalar, vec_A, vec_B, process_id, num_processes);
+    end_time = MPI_Wtime();
+    parallel_duration = end_time - start_time;
+
+    // Compute Speedup
+    if (process_id == 0) {
+        printf("Serial Execution Time: %lf seconds\n", serial_duration);
+        printf("Parallel Execution Time: %lf seconds\n", parallel_duration);
+        printf("Speedup: %lf\n", serial_duration / parallel_duration);
+    }
+
+    free(vec_A);
+    free(vec_B);
+    MPI_Finalize();
+    return 0;
+}
