@@ -1,0 +1,51 @@
+#include <mpi.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+#define MATRIX_SIZE 70
+
+void matrix_multiply(int mat1[MATRIX_SIZE][MATRIX_SIZE], int mat2[MATRIX_SIZE][MATRIX_SIZE], int result[MATRIX_SIZE][MATRIX_SIZE], int rows_per_process) {
+    for (int i = 0; i < rows_per_process; i++)
+        for (int j = 0; j < MATRIX_SIZE; j++) {
+            result[i][j] = 0;
+            for (int k = 0; k < MATRIX_SIZE; k++)
+                result[i][j] += mat1[i][k] * mat2[k][j];
+        }
+}
+
+int main(int argc, char** argv) {
+    int process_id, num_processes;
+    double start_time, execution_time;
+    int matrix_A[MATRIX_SIZE][MATRIX_SIZE], matrix_B[MATRIX_SIZE][MATRIX_SIZE], matrix_C[MATRIX_SIZE][MATRIX_SIZE];
+    
+    MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &process_id);
+    MPI_Comm_size(MPI_COMM_WORLD, &num_processes);
+
+    int rows_per_process = MATRIX_SIZE / num_processes;
+    if (process_id == 0) {
+        // Initialize matrices
+        for (int i = 0; i < MATRIX_SIZE; i++)
+            for (int j = 0; j < MATRIX_SIZE; j++) {
+                matrix_A[i][j] = rand() % 10;
+                matrix_B[i][j] = rand() % 10;
+            }
+        start_time = MPI_Wtime();
+    }
+
+    // Scatter rows of matrix_A, Broadcast matrix_B
+    MPI_Bcast(matrix_B, MATRIX_SIZE * MATRIX_SIZE, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Scatter(matrix_A, rows_per_process * MATRIX_SIZE, MPI_INT, matrix_A, rows_per_process * MATRIX_SIZE, MPI_INT, 0, MPI_COMM_WORLD);
+
+    matrix_multiply(matrix_A, matrix_B, matrix_C, rows_per_process);
+
+    MPI_Gather(matrix_C, rows_per_process * MATRIX_SIZE, MPI_INT, matrix_C, rows_per_process * MATRIX_SIZE, MPI_INT, 0, MPI_COMM_WORLD);
+
+    if (process_id == 0) {
+        execution_time = MPI_Wtime() - start_time;
+        printf("Parallel execution time: %lf seconds\n", execution_time);
+    }
+
+    MPI_Finalize();
+    return 0;
+}
