@@ -1,0 +1,45 @@
+#include <mpi.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+#define ARRAY_SIZE 10
+
+void parallel_sort(int data[], int length) {
+    for (int phase = 0; phase < length; phase++) {
+        for (int i = (phase % 2 == 0) ? 0 : 1; i < length - 1; i += 2) {
+            if (data[i] > data[i + 1]) {
+                int swap = data[i];
+                data[i] = data[i + 1];
+                data[i + 1] = swap;
+            }
+        }
+    }
+}
+
+int main(int argc, char** argv) {
+    int process_id, num_processes, global_data[ARRAY_SIZE], local_data[ARRAY_SIZE / 2];
+    
+    MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &process_id);
+    MPI_Comm_size(MPI_COMM_WORLD, &num_processes);
+
+    if (process_id == 0) {
+        for (int i = 0; i < ARRAY_SIZE; i++) global_data[i] = rand() % 100;
+        printf("Original Array: ");
+        for (int i = 0; i < ARRAY_SIZE; i++) printf("%d ", global_data[i]);
+        printf("\n");
+    }
+
+    MPI_Scatter(global_data, ARRAY_SIZE / num_processes, MPI_INT, local_data, ARRAY_SIZE / num_processes, MPI_INT, 0, MPI_COMM_WORLD);
+    parallel_sort(local_data, ARRAY_SIZE / num_processes);
+    MPI_Gather(local_data, ARRAY_SIZE / num_processes, MPI_INT, global_data, ARRAY_SIZE / num_processes, MPI_INT, 0, MPI_COMM_WORLD);
+
+    if (process_id == 0) {
+        printf("Sorted Array: ");
+        for (int i = 0; i < ARRAY_SIZE; i++) printf("%d ", global_data[i]);
+        printf("\n");
+    }
+
+    MPI_Finalize();
+    return 0;
+}
