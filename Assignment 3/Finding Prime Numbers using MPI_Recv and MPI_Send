@@ -1,0 +1,57 @@
+#include <mpi.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+#define UPPER_LIMIT 100
+
+int check_prime(int number) {
+    if (number < 2) return 0;
+    for (int i = 2; i * i <= number; i++)
+        if (number % i == 0)
+            return 0;
+    return 1;
+}
+
+int main(int argc, char** argv) {
+    int process_id, num_processes, received_num;
+    MPI_Status status;
+
+    MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &process_id);
+    MPI_Comm_size(MPI_COMM_WORLD, &num_processes);
+
+    if (process_id == 0) {  // Master process
+        for (int i = 2; i <= UPPER_LIMIT; i++) {
+            int worker_id;
+            MPI_Recv(&worker_id, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &status);
+            MPI_Send(&i, 1, MPI_INT, worker_id, 0, MPI_COMM_WORLD);
+        }
+
+        for (int i = 1; i < num_processes; i++) {
+            int termination_signal = -1;
+            MPI_Recv(&received_num, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &status);
+            MPI_Send(&termination_signal, 1, MPI_INT, received_num, 0, MPI_COMM_WORLD);
+        }
+
+    } else {  // Worker processes
+        while (1) {
+            MPI_Send(&process_id, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
+            MPI_Recv(&received_num, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, &status);
+            if (received_num == -1) break;
+            received_num = check_prime(received_num) ? received_num : -received_num;
+            MPI_Send(&received_num, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
+        }
+    }
+
+    if (process_id == 0) {
+        printf("Prime numbers up to %d:\n", UPPER_LIMIT);
+        for (int i = 2; i <= UPPER_LIMIT; i++) {
+            MPI_Recv(&received_num, 1, MPI_INT, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &status);
+            if (received_num > 0) printf("%d ", received_num);
+        }
+        printf("\n");
+    }
+
+    MPI_Finalize();
+    return 0;
+}
