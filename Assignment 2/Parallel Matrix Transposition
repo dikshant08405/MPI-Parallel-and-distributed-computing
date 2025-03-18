@@ -1,0 +1,43 @@
+#include <mpi.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+#define SIZE 4
+
+int main(int argc, char** argv) {
+    int process_id, num_processes;
+    int original_matrix[SIZE][SIZE], transposed_matrix[SIZE][SIZE];
+
+    MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &process_id);
+    MPI_Comm_size(MPI_COMM_WORLD, &num_processes);
+
+    int rows_per_process = SIZE / num_processes;
+    int local_matrix[rows_per_process][SIZE], local_transpose[rows_per_process][SIZE];
+
+    if (process_id == 0) {
+        for (int i = 0; i < SIZE; i++)
+            for (int j = 0; j < SIZE; j++)
+                original_matrix[i][j] = i * SIZE + j + 1;
+    }
+
+    MPI_Scatter(original_matrix, rows_per_process * SIZE, MPI_INT, local_matrix, rows_per_process * SIZE, MPI_INT, 0, MPI_COMM_WORLD);
+
+    for (int i = 0; i < rows_per_process; i++)
+        for (int j = 0; j < SIZE; j++)
+            local_transpose[j][i] = local_matrix[i][j];
+
+    MPI_Gather(local_transpose, rows_per_process * SIZE, MPI_INT, transposed_matrix, rows_per_process * SIZE, MPI_INT, 0, MPI_COMM_WORLD);
+
+    if (process_id == 0) {
+        printf("Transposed Matrix:\n");
+        for (int i = 0; i < SIZE; i++) {
+            for (int j = 0; j < SIZE; j++)
+                printf("%d ", transposed_matrix[i][j]);
+            printf("\n");
+        }
+    }
+
+    MPI_Finalize();
+    return 0;
+}
