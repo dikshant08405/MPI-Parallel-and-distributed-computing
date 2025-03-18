@@ -1,0 +1,47 @@
+#include <mpi.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+#define ARRAY_SIZE 8
+
+int main(int argc, char** argv) {
+    int process_id, num_processes;
+    int global_array[ARRAY_SIZE], prefix_result[ARRAY_SIZE];
+
+    MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &process_id);
+    MPI_Comm_size(MPI_COMM_WORLD, &num_processes);
+
+    int elements_per_process = ARRAY_SIZE / num_processes;
+    int local_array[elements_per_process], local_prefix[elements_per_process];
+
+    if (process_id == 0) {
+        for (int i = 0; i < ARRAY_SIZE; i++) global_array[i] = i + 1;
+    }
+
+    MPI_Scatter(global_array, elements_per_process, MPI_INT, local_array, elements_per_process, MPI_INT, 0, MPI_COMM_WORLD);
+
+    local_prefix[0] = local_array[0];
+    for (int i = 1; i < elements_per_process; i++) {
+        local_prefix[i] = local_prefix[i - 1] + local_array[i];
+    }
+
+    int cumulative_offset = 0;
+    MPI_Scan(&local_prefix[elements_per_process - 1], &cumulative_offset, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+    if (process_id != 0) {
+        for (int i = 0; i < elements_per_process; i++) {
+            local_prefix[i] += cumulative_offset;
+        }
+    }
+
+    MPI_Gather(local_prefix, elements_per_process, MPI_INT, prefix_result, elements_per_process, MPI_INT, 0, MPI_COMM_WORLD);
+
+    if (process_id == 0) {
+        printf("Computed Prefix Sum: ");
+        for (int i = 0; i < ARRAY_SIZE; i++) printf("%d ", prefix_result[i]);
+        printf("\n");
+    }
+
+    MPI_Finalize();
+    return 0;
+}
