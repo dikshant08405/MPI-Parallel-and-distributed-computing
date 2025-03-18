@@ -1,0 +1,43 @@
+#include <mpi.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+#define GRID_SIZE 10
+#define MAX_ITER 100
+
+int main(int argc, char** argv) {
+    int process_id, num_processes;
+    double temperature[GRID_SIZE][GRID_SIZE], updated_temperature[GRID_SIZE][GRID_SIZE];
+
+    MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &process_id);
+    MPI_Comm_size(MPI_COMM_WORLD, &num_processes);
+
+    if (process_id == 0) {
+        for (int row = 0; row < GRID_SIZE; row++)
+            for (int col = 0; col < GRID_SIZE; col++)
+                temperature[row][col] = (row == 0) ? 100.0 : 0.0;
+    }
+
+    MPI_Bcast(temperature, GRID_SIZE * GRID_SIZE, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+    for (int step = 0; step < MAX_ITER; step++) {
+        for (int row = 1; row < GRID_SIZE - 1; row++)
+            for (int col = 1; col < GRID_SIZE - 1; col++)
+                updated_temperature[row][col] = 0.25 * (temperature[row-1][col] + temperature[row+1][col] + temperature[row][col-1] + temperature[row][col+1]);
+
+        MPI_Allreduce(updated_temperature, temperature, GRID_SIZE * GRID_SIZE, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+    }
+
+    if (process_id == 0) {
+        printf("Final Temperature Distribution:\n");
+        for (int row = 0; row < GRID_SIZE; row++) {
+            for (int col = 0; col < GRID_SIZE; col++)
+                printf("%6.2f ", temperature[row][col]);
+            printf("\n");
+        }
+    }
+
+    MPI_Finalize();
+    return 0;
+}
