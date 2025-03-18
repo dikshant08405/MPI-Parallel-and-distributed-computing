@@ -1,0 +1,31 @@
+#include <mpi.h>
+#include <stdio.h>
+
+#define TOTAL_INTERVALS 1000000
+
+int main(int argc, char** argv) {
+    int process_id, num_processes, current_step;
+    double interval_width, partial_area = 0.0, total_area = 0.0, midpoint_x, approximated_pi;
+
+    MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &process_id);
+    MPI_Comm_size(MPI_COMM_WORLD, &num_processes);
+
+    interval_width = 1.0 / (double)TOTAL_INTERVALS;
+    MPI_Bcast(&interval_width, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+    for (current_step = process_id; current_step < TOTAL_INTERVALS; current_step += num_processes) {
+        midpoint_x = (current_step + 0.5) * interval_width;
+        partial_area += 4.0 / (1.0 + midpoint_x * midpoint_x);
+    }
+
+    MPI_Reduce(&partial_area, &total_area, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+
+    if (process_id == 0) {
+        approximated_pi = interval_width * total_area;
+        printf("Approximated Pi Value: %lf\n", approximated_pi);
+    }
+
+    MPI_Finalize();
+    return 0;
+}
