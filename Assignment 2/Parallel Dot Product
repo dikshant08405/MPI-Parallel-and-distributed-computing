@@ -1,0 +1,41 @@
+#include <mpi.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+#define VECTOR_SIZE 100
+
+int main(int argc, char** argv) {
+    int process_id, num_processes;
+    double partial_sum = 0, final_sum = 0;
+    double vector_X[VECTOR_SIZE], vector_Y[VECTOR_SIZE];
+
+    MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &process_id);
+    MPI_Comm_size(MPI_COMM_WORLD, &num_processes);
+
+    int elements_per_process = VECTOR_SIZE / num_processes;
+    double local_X[elements_per_process], local_Y[elements_per_process];
+
+    if (process_id == 0) {
+        for (int i = 0; i < VECTOR_SIZE; i++) {
+            vector_X[i] = i + 1;
+            vector_Y[i] = i + 1;
+        }
+    }
+
+    MPI_Scatter(vector_X, elements_per_process, MPI_DOUBLE, local_X, elements_per_process, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    MPI_Scatter(vector_Y, elements_per_process, MPI_DOUBLE, local_Y, elements_per_process, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+    for (int i = 0; i < elements_per_process; i++) {
+        partial_sum += local_X[i] * local_Y[i];
+    }
+
+    MPI_Reduce(&partial_sum, &final_sum, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+
+    if (process_id == 0) {
+        printf("Computed Dot Product: %lf\n", final_sum);
+    }
+
+    MPI_Finalize();
+    return 0;
+}
