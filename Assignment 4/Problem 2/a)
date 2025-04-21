@@ -1,0 +1,50 @@
+#include <iostream>
+#include <vector>
+#include <thread>
+#include <cstdlib>
+#include <ctime>
+
+void mergeSegments(std::vector<int>& arr, int start, int middle, int end) {
+    std::vector<int> left(arr.begin() + start, arr.begin() + middle + 1);
+    std::vector<int> right(arr.begin() + middle + 1, arr.begin() + end + 1);
+
+    int i = 0, j = 0, idx = start;
+
+    while (i < left.size() && j < right.size()) {
+        arr[idx++] = (left[i] <= right[j]) ? left[i++] : right[j++];
+    }
+
+    while (i < left.size()) arr[idx++] = left[i++];
+    while (j < right.size()) arr[idx++] = right[j++];
+}
+
+
+void threadedMergeSort(std::vector<int>& arr, int start, int end) {
+    if (start >= end) return;
+
+    int mid = (start + end) / 2;
+
+    std::thread firstHalf(threadedMergeSort, std::ref(arr), start, mid);
+    std::thread secondHalf(threadedMergeSort, std::ref(arr), mid + 1, end);
+
+    firstHalf.join();
+    secondHalf.join();
+
+    mergeSegments(arr, start, mid, end);
+}
+
+int main() {
+    const int LENGTH = 1000;
+    std::vector<int> numbers(LENGTH);
+
+    std::srand(static_cast<unsigned int>(std::time(nullptr)));
+    for (int& x : numbers) x = std::rand() % 10000;
+
+    threadedMergeSort(numbers, 0, LENGTH - 1);
+
+    std::cout << "First 10 elements after sorting (CPU): ";
+    for (int i = 0; i < 10; ++i) std::cout << numbers[i] << " ";
+    std::cout << "\n";
+
+    return 0;
+}
