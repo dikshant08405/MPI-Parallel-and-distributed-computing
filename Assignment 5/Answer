@@ -1,0 +1,89 @@
+#include <iostream>
+#include <cuda_runtime.h>
+
+#define ELEMENTS (1024 * 1024)
+#define THREADS 256
+#define BLOCK_COUNT ((ELEMENTS + THREADS - 1) / THREADS)
+
+// -----------------------------
+
+__device__ __constant__ float constVecA[ELEMENTS];
+__device__ __constant__ float constVecB[ELEMENTS];
+__device__ float outputVec[ELEMENTS];
+
+// -----------------------------
+
+__global__ void addVectors() {
+    int globalIdx = threadIdx.x + blockIdx.x * blockDim.x;
+    if (globalIdx < ELEMENTS) {
+        outputVec[globalIdx] = constVecA[globalIdx] + constVecB[globalIdx];
+    }
+}
+
+// -----------------------------
+
+float hostVecA[ELEMENTS], hostVecB[ELEMENTS], hostResult[ELEMENTS];
+
+int main() {
+    // Fill input vectors with sample values
+    for (int i = 0; i < ELEMENTS; ++i) {
+        hostVecA[i] = static_cast<float>(i);
+        hostVecB[i] = static_cast<float>(i * 2);
+    }
+
+    // Copy input data to constant device memory
+    cudaMemcpyToSymbol(constVecA, hostVecA, sizeof(float) * ELEMENTS);
+    cudaMemcpyToSymbol(constVecB, hostVecB, sizeof(float) * ELEMENTS);
+
+    // Timing setup
+    cudaEvent_t begin, end;
+    cudaEventCreate(&begin);
+    cudaEventCreate(&end);
+
+    cudaEventRecord(begin);
+    addVectors<<<BLOCK_COUNT, THREADS>>>();
+    cudaEventRecord(end);
+
+    cudaEventSynchronize(end);
+
+    float execTime = 0.0f;
+    cudaEventElapsedTime(&execTime, begin, end);
+
+    // Copy result back to host
+    cudaMemcpyFromSymbol(hostResult, outputVec, sizeof(float) * ELEMENTS);
+
+    // Display a few output values
+    std::cout << "Vector Addition Output (Sample):\n";
+    for (int i = 0; i < 5; ++i) {
+        std::cout << "hostResult[" << i << "] = " << hostResult[i] << "\n";
+    }
+
+    std::cout << "\nKernel Time: " << execTime << " ms\n";
+
+    // Device info and bandwidth analysis
+    cudaDeviceProp deviceProps;
+    cudaGetDeviceProperties(&deviceProps, 0);
+
+    int memClock = deviceProps.memoryClockRate;
+    int busWidth = deviceProps.memoryBusWidth;
+
+    float theoreticalBandwidth = 2.0f * memClock * busWidth / 8.0f / 1e6f;
+
+    std::cout << "\n[GPU Info]\n";
+    std::cout << "Memory Clock      : " << memClock << " kHz\n";
+    std::cout << "Bus Width         : " << busWidth << " bits\n";
+    std::cout << "Theoretical BW    : " << theoreticalBandwidth << " GB/s\n";
+
+    size_t bytesRead = 2 * sizeof(float) * ELEMENTS;
+    size_t bytesWritten = sizeof(float) * ELEMENTS;
+    float execSeconds = execTime / 1000.0f;
+
+    float actualBandwidth = (bytesRead + bytesWritten) / (execSeconds * 1e9f);
+    std::cout << "Measured BW       : " << actualBandwidth << " GB/s\n";
+
+    // Clean up events
+    cudaEventDestroy(begin);
+    cudaEventDestroy(end);
+
+    return 0;
+}
