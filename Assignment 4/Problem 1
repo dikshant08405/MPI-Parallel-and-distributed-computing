@@ -1,0 +1,42 @@
+#include <iostream>
+#include <cuda_runtime.h>
+
+#define SIZE 1024
+
+__global__ void computeTasks(int* result) {
+    int idx = threadIdx.x;
+
+    if (idx == 0) {
+        int total = 0;
+        for (int i = 1; i <= SIZE; ++i) {
+            total += i;
+        }
+        result[0] = total;
+    } else if (idx == 1) {
+        int formula_result = (SIZE * (SIZE + 1)) / 2;
+        result[1] = formula_result;
+    }
+}
+
+int main() {
+    int host_result[2] = {0};        
+    int* device_result = nullptr;    
+
+    // Allocate memory on device
+    cudaMalloc((void**)&device_result, sizeof(int) * 2);
+
+    // Launch kernel with 2 threads in 1 block
+    computeTasks<<<1, 2>>>(device_result);
+
+    // Copy back results to host
+    cudaMemcpy(host_result, device_result, sizeof(int) * 2, cudaMemcpyDeviceToHost);
+
+    // Display results
+    std::cout << "Sum using loop       (Thread 0): " << host_result[0] << std::endl;
+    std::cout << "Sum using formula    (Thread 1): " << host_result[1] << std::endl;
+
+    // Free device memory
+    cudaFree(device_result);
+
+    return 0;
+}
